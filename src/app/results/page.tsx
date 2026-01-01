@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { TypingSession } from '@/types/typing';
 import { getSessionById, exportSessionsAsCSV, exportSessionsAsJSON, downloadFile } from '@/lib/storage';
 import { formatTime } from '@/lib/calculations';
 
-export default function ResultsPage() {
+function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('id');
@@ -240,5 +240,17 @@ export default function ResultsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-2xl">Loading results...</div>
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
   );
 }

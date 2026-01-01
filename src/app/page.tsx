@@ -1,16 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-
-interface KeystrokeEvent {
-  key: string;
-  keyDownTime: number;
-  keyUpTime: number | null;
-  duration: number | null;
-  isCorrect: boolean;
-}
+import { useRouter } from 'next/navigation';
+import { KeystrokeEvent, TypingSession } from '@/types/typing';
+import { saveSession } from '@/lib/storage';
+import { calculatePerformanceMetrics, formatTime, generateId } from '@/lib/calculations';
 
 export default function TypingTest() {
+  const router = useRouter();
   const [testStatus, setTestStatus] = useState<'idle' | 'active' | 'completed'>('idle');
   const [typedText, setTypedText] = useState('');
   const [keystrokes, setKeystrokes] = useState<KeystrokeEvent[]>([]);
@@ -61,15 +58,49 @@ export default function TypingTest() {
     textareaRef.current?.focus();
   };
 
-  const handleFinishTest = () => {
-    setTestStatus('completed');
-    // Here we'll later save to IndexedDB and show results
-    console.log('Test completed!', {
-      wpm: calculateWPM(),
-      accuracy: calculateAccuracy(),
+  const handleFinishTest = async () => {
+    if (!startTime) return;
+    
+    const endTime = Date.now();
+    const sessionId = generateId();
+    
+    // Calculate comprehensive metrics
+    const metrics = calculatePerformanceMetrics(
+      typedText,
+      referenceText,
+      keystrokes,
+      startTime,
+      endTime
+    );
+    
+    // Create typing session object
+    const session: TypingSession = {
+      id: sessionId,
+      timestamp: startTime,
+      referenceText: referenceText,
+      typedText: typedText,
       keystrokes: keystrokes,
-      duration: elapsedTime
-    });
+      startTime: startTime,
+      endTime: endTime,
+      duration: endTime - startTime,
+      wpm: metrics.wpm,
+      accuracy: metrics.accuracy,
+      errorRate: metrics.errorRate,
+      tremorScore: metrics.tremorSeverityScore,
+      fatigueScore: metrics.fatigueScore
+    };
+    
+    try {
+      // Save to IndexedDB
+      await saveSession(session);
+      
+      // Redirect to results page
+      router.push(`/results?id=${sessionId}`);
+    } catch (error) {
+      console.error('Error saving session:', error);
+      // Still show completed state even if save fails
+      setTestStatus('completed');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -94,7 +125,8 @@ export default function TypingTest() {
       keyDownTime: currentKeyDownTime,
       keyUpTime: keyUpTime,
       duration: duration,
-      isCorrect: isCorrect
+      isCorrect: isCorrect,
+      characterIndex: currentCharIndex
     };
 
     setKeystrokes(prev => [...prev, keystrokeEvent]);
@@ -185,12 +217,20 @@ export default function TypingTest() {
           {/* Action Buttons */}
           <div className="flex gap-4 justify-center">
             {testStatus === 'idle' && (
-              <button
-                onClick={handleStartTest}
-                className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-lg transition-colors"
-              >
-                Start Test
-              </button>
+              <>
+                <button
+                  onClick={handleStartTest}
+                  className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-lg transition-colors"
+                >
+                  Start Test
+                </button>
+                <button
+                  onClick={() => router.push('/history')}
+                  className="px-8 py-4 bg-slate-700 hover:bg-slate-600 text-white text-lg font-semibold rounded-lg transition-colors"
+                >
+                  View History
+                </button>
+              </>
             )}
 
             {testStatus === 'active' && (

@@ -1,65 +1,221 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect, useRef } from 'react';
+
+interface KeystrokeEvent {
+  key: string;
+  keyDownTime: number;
+  keyUpTime: number | null;
+  duration: number | null;
+  isCorrect: boolean;
+}
+
+export default function TypingTest() {
+  const [testStatus, setTestStatus] = useState<'idle' | 'active' | 'completed'>('idle');
+  const [typedText, setTypedText] = useState('');
+  const [keystrokes, setKeystrokes] = useState<KeystrokeEvent[]>([]);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [currentKeyDownTime, setCurrentKeyDownTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sample text for typing test
+  const referenceText = "The quick brown fox jumps over the lazy dog. This simple sentence helps us measure typing speed and accuracy effectively.";
+
+  // Timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (testStatus === 'active' && startTime) {
+      interval = setInterval(() => {
+        setElapsedTime(Date.now() - startTime);
+      }, 100);
+    }
+    return () => clearInterval(interval);
+  }, [testStatus, startTime]);
+
+  // Calculate WPM
+  const calculateWPM = () => {
+    if (!startTime || elapsedTime === 0) return 0;
+    const minutes = elapsedTime / 60000;
+    const words = typedText.length / 5; // Standard: 5 chars = 1 word
+    return Math.round(words / minutes);
+  };
+
+  // Calculate accuracy
+  const calculateAccuracy = () => {
+    if (typedText.length === 0) return 100;
+    let correct = 0;
+    for (let i = 0; i < typedText.length; i++) {
+      if (typedText[i] === referenceText[i]) correct++;
+    }
+    return Math.round((correct / typedText.length) * 100);
+  };
+
+  const handleStartTest = () => {
+    setTestStatus('active');
+    setStartTime(Date.now());
+    setTypedText('');
+    setKeystrokes([]);
+    setElapsedTime(0);
+    textareaRef.current?.focus();
+  };
+
+  const handleFinishTest = () => {
+    setTestStatus('completed');
+    // Here we'll later save to IndexedDB and show results
+    console.log('Test completed!', {
+      wpm: calculateWPM(),
+      accuracy: calculateAccuracy(),
+      keystrokes: keystrokes,
+      duration: elapsedTime
+    });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (testStatus !== 'active') return;
+    
+    // Ignore modifier keys
+    if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
+
+    setCurrentKeyDownTime(Date.now());
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (testStatus !== 'active' || currentKeyDownTime === null) return;
+
+    const keyUpTime = Date.now();
+    const duration = keyUpTime - currentKeyDownTime;
+    const currentCharIndex = typedText.length;
+    const isCorrect = e.key === referenceText[currentCharIndex];
+
+    const keystrokeEvent: KeystrokeEvent = {
+      key: e.key,
+      keyDownTime: currentKeyDownTime,
+      keyUpTime: keyUpTime,
+      duration: duration,
+      isCorrect: isCorrect
+    };
+
+    setKeystrokes(prev => [...prev, keystrokeEvent]);
+    setCurrentKeyDownTime(null);
+  };
+
+  const formatTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="container mx-auto px-4 py-12">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-white mb-4">
+            OnCue Analytics Engine
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-slate-300 text-lg">
+            Real-time typing performance tracking for Parkinson's research
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Main Content */}
+        <div className="max-w-4xl mx-auto">
+          {/* Stats Bar */}
+          {testStatus !== 'idle' && (
+            <div className="bg-slate-800/50 backdrop-blur rounded-lg p-6 mb-6 border border-slate-700">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm mb-1">Time</p>
+                  <p className="text-3xl font-bold text-orange-500">
+                    {formatTime(elapsedTime)}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm mb-1">WPM</p>
+                  <p className="text-3xl font-bold text-orange-500">
+                    {calculateWPM()}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-slate-400 text-sm mb-1">Accuracy</p>
+                  <p className="text-3xl font-bold text-orange-500">
+                    {calculateAccuracy()}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reference Text */}
+          <div className="bg-slate-800/50 backdrop-blur rounded-lg p-6 mb-6 border border-slate-700">
+            <h2 className="text-white text-xl font-semibold mb-4">Type this text:</h2>
+            <p className="text-slate-300 text-lg leading-relaxed font-mono">
+              {referenceText.split('').map((char, index) => {
+                let colorClass = 'text-slate-300';
+                if (index < typedText.length) {
+                  colorClass = typedText[index] === char ? 'text-green-400' : 'text-red-400';
+                }
+                return (
+                  <span key={index} className={colorClass}>
+                    {char}
+                  </span>
+                );
+              })}
+            </p>
+          </div>
+
+          {/* Typing Area */}
+          <div className="bg-slate-800/50 backdrop-blur rounded-lg p-6 mb-6 border border-slate-700">
+            <h2 className="text-white text-xl font-semibold mb-4">Your typing:</h2>
+            <textarea
+              ref={textareaRef}
+              value={typedText}
+              onChange={(e) => setTypedText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onKeyUp={handleKeyUp}
+              disabled={testStatus !== 'active'}
+              className="w-full h-32 bg-slate-900 text-white text-lg p-4 rounded-lg border border-slate-600 focus:border-orange-500 focus:outline-none font-mono resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+              placeholder={testStatus === 'idle' ? 'Click "Start Test" to begin' : 'Start typing...'}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 justify-center">
+            {testStatus === 'idle' && (
+              <button
+                onClick={handleStartTest}
+                className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-lg transition-colors"
+              >
+                Start Test
+              </button>
+            )}
+
+            {testStatus === 'active' && (
+              <button
+                onClick={handleFinishTest}
+                className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-lg transition-colors"
+              >
+                Finish Test
+              </button>
+            )}
+
+            {testStatus === 'completed' && (
+              <div className="text-center">
+                <p className="text-white text-xl mb-4">Test Completed!</p>
+                <button
+                  onClick={handleStartTest}
+                  className="px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white text-lg font-semibold rounded-lg transition-colors"
+                >
+                  Take Another Test
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
